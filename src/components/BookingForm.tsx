@@ -40,31 +40,26 @@ interface BookingFormProps {
 interface EstimationResponse {
   status: string;
   data: {
-    prixBase: number;
-    fraisService: number;
-    total: number;
-    detail: {
+    montant: number;
+    details: {
+      prixBase: number;
       distance: number;
+      supplements: {
+        passagers: string;
+        climatisation: string;
+      };
       duree: number;
-      majorations: {
-        climatisation?: number;
-        nuit?: number;
-      };
-      options: {
-        passagers: number;
-        climatisation: boolean;
-        date: string;
-      };
-      trajet: {
-        depart: string;
-        arrivee: string;
-        coordinates: {
-          depart: [number, number];
-          arrivee: [number, number];
-        };
-      };
     };
   };
+}
+
+interface APIResponse<T> {
+  status: string;
+  data: T;
+}
+
+interface VilleSearchResponse {
+  data: City[];
 }
 
 export const BookingForm = ({ onSearchComplete }: BookingFormProps) => {
@@ -94,7 +89,7 @@ export const BookingForm = ({ onSearchComplete }: BookingFormProps) => {
   const [showDialog, setShowDialog] = useState(false);
   const [selectedDepartCity, setSelectedDepartCity] = useState<City | null>(null);
   const [selectedArriveeCity, setSelectedArriveeCity] = useState<City | null>(null);
-  const [currentStep, setCurrentStep] = useState<'depart' | 'arrivee' | 'choixType' | 'details' | 'estimation'>('depart');
+  const [currentStep, setCurrentStep] = useState<'depart' | 'arrivee' | 'choixType' | 'details' | 'estimation' | 'reservation'>('depart');
   const [isQuickEstimate, setIsQuickEstimate] = useState(false);
   const [reservationType, setReservationType] = useState<'immediate' | 'scheduled'>('immediate');
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
@@ -118,7 +113,7 @@ export const BookingForm = ({ onSearchComplete }: BookingFormProps) => {
       
       setLoading(true);
       try {
-        const response = await villeAPI.search(debouncedDepartQuery);
+        const response = await villeAPI.search(debouncedDepartQuery) as APIResponse<VilleSearchResponse>;
         if (response.data.status === "success") {
           setDepartSuggestions(response.data.data);
         }
@@ -198,18 +193,26 @@ export const BookingForm = ({ onSearchComplete }: BookingFormProps) => {
       console.log('📦 Réponse API:', response.data);
 
       if (response.data.status === "success") {
-        const estimationData = response.data.data.data;
+        // Vérification de la structure de la réponse
+        if (!response.data.data) {
+          throw new Error('Données manquantes dans la réponse');
+        }
+
+        const estimationData = response.data.data;
         console.log('🔍 Données reçues:', estimationData);
 
-        // Vérification et formatage des données
+        // Adaptation du format des données reçues au format attendu par l'interface
         const formattedEstimation = {
-          prixBase: Number(estimationData.prixBase),
-          fraisService: Number(estimationData.fraisService),
-          total: Number(estimationData.total),
+          prixBase: Number(estimationData.details.prixBase),
+          fraisService: 0, // À définir selon votre logique
+          total: Number(estimationData.montant),
           detail: {
-            distance: Number(estimationData.detail.distance),
-            duree: Number(estimationData.detail.duree),
-            majorations: estimationData.detail.majorations
+            distance: Number(estimationData.details.distance),
+            duree: Number(estimationData.details.duree),
+            majorations: {
+              passagers: estimationData.details.supplements.passagers,
+              climatisation: estimationData.details.supplements.climatisation
+            }
           }
         };
 
