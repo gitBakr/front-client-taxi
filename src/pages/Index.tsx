@@ -7,6 +7,7 @@ import { PopularDestinations } from "@/components/PopularDestinations";
 import { Testimonials } from "@/components/Testimonials";
 import { ThemeSwitcher } from "@/components/ThemeSwitcher";
 import { Footer } from "@/components/Footer";
+import { TestAPI } from '@/components/TestAPI';
 
 interface SearchResult {
   price: number;
@@ -96,6 +97,8 @@ const Index = () => {
 
       {/* Theme Switcher */}
       <ThemeSwitcher />
+
+      <TestAPI />
     </div>
   );
 };
