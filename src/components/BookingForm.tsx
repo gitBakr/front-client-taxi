@@ -149,25 +149,27 @@ export const BookingForm = ({ onSearchComplete }: BookingFormProps) => {
 
   // Estimation instantanée quand une ville est sélectionnée
   const estimatePrix = async (selectedCity: City) => {
-    if (!selectedDepartCity || !selectedCity) {
-      console.warn('❌ Villes manquantes:', { 
-        depart: selectedDepartCity?.nom, 
-        arrivee: selectedCity?.nom 
-      });
-      return;
-    }
-
-    console.log('📍 Début estimation avec:', {
-      depart: selectedDepartCity.nom,
-      arrivee: selectedCity.nom,
-      coordinates: {
-        depart: selectedDepartCity.coordinates,
-        arrivee: selectedCity.coordinates
-      }
-    });
-
     setIsLoading(true);
+    setError(null); // Réinitialiser l'erreur
+
     try {
+      if (!selectedDepartCity || !selectedCity) {
+        console.warn('❌ Villes manquantes:', { 
+          depart: selectedDepartCity?.nom, 
+          arrivee: selectedCity?.nom 
+        });
+        return;
+      }
+
+      console.log('📍 Début estimation avec:', {
+        depart: selectedDepartCity.nom,
+        arrivee: selectedCity.nom,
+        coordinates: {
+          depart: selectedDepartCity.coordinates,
+          arrivee: selectedCity.coordinates
+        }
+      });
+
       // Validation des coordonnées
       if (!selectedDepartCity.coordinates || !selectedCity.coordinates) {
         throw new Error('Coordonnées manquantes pour une des villes');
@@ -196,75 +198,52 @@ export const BookingForm = ({ onSearchComplete }: BookingFormProps) => {
 
       const response = await prixAPI.calculerPrix(params);
       
-      // Log pour déboguer en production
-      console.log('🌍 API Response:', {
-        url: import.meta.env.VITE_API_URL,
-        params,
-        response: response.data
+      // Log détaillé de la réponse
+      console.log('📦 Réponse API brute:', {
+        status: response?.status,
+        data: response?.data,
+        details: response?.data?.data?.details
       });
 
-      if (!response?.data?.data?.details?.supplements) {
-        throw new Error('Structure de réponse invalide');
+      // Vérification plus précise de la structure
+      if (!response?.data?.status === "success") {
+        throw new Error('Réponse API non valide');
       }
 
-      // Logs détaillés
-      console.log('🌍 Environnement:', import.meta.env.MODE);
-      console.log('🔗 API URL:', import.meta.env.VITE_API_URL);
-      console.log('📦 Réponse API complète:', {
-        status: response.status,
-        statusText: response.statusText,
-        headers: response.headers,
-        data: response.data
-      });
+      const estimationData = response.data.data;
 
-      if (response.data.status === "success") {
-        const estimationData = response.data.data;
-        
-        // Vérification plus stricte
-        if (!estimationData?.details?.supplements) {
-          console.error('❌ Structure invalide:', estimationData);
-          throw new Error('Structure de réponse invalide');
-        }
+      // Vérification de la structure des données
+      if (!estimationData?.details) {
+        console.error('❌ Données manquantes:', estimationData);
+        throw new Error('Données de prix manquantes');
+      }
 
-        console.log('🔍 Données reçues:', estimationData);
-
-        // Vérification détaillée de la structure
-        if (!estimationData.details) {
-          throw new Error('Details manquants dans la réponse');
-        }
-
-        // Création d'un objet supplements par défaut si manquant
-        const supplements = estimationData.details.supplements || {
-          passagers: '0',
-          climatisation: '0'
-        };
-
-        const formattedEstimation = {
-          prixBase: Number(estimationData.details.prixBase || 0),
-          fraisService: 0,
-          total: Number(estimationData.montant || 0),
-          detail: {
-            distance: Number(estimationData.details.distance || 0),
-            duree: Number(estimationData.details.duree || 0),
-            majorations: {
-              passagers: supplements.passagers || '0',
-              climatisation: supplements.climatisation || '0'
-            }
+      // Formatage avec valeurs par défaut
+      const formattedEstimation = {
+        prixBase: Number(estimationData.details.prixBase || 0),
+        fraisService: 0,
+        total: Number(estimationData.montant || 0),
+        detail: {
+          distance: Number(estimationData.details.distance || 0),
+          duree: Number(estimationData.details.duree || 0),
+          majorations: {
+            passagers: estimationData.details.supplements?.passagers || '0',
+            climatisation: estimationData.details.supplements?.climatisation || '0'
           }
-        };
+        }
+      };
 
-        console.log('✅ Estimation formatée:', formattedEstimation);
-        setEstimation(formattedEstimation);
-      } else {
-        throw new Error('Réponse API invalide');
-      }
+      console.log('✅ Estimation formatée:', formattedEstimation);
+      setEstimation(formattedEstimation);
+
     } catch (error: any) {
+      const errorMessage = error.response?.data?.message || error.message || 'Erreur lors du calcul du prix';
       console.error('❌ Erreur détaillée:', {
-        message: error.message,
+        message: errorMessage,
         response: error.response?.data,
-        config: error.config
+        originalError: error
       });
-      setError(error.message); // Afficher l'erreur à l'utilisateur
+      setError(errorMessage);
     } finally {
       setIsLoading(false);
     }
@@ -634,8 +613,14 @@ export const BookingForm = ({ onSearchComplete }: BookingFormProps) => {
           </Button>
         )}
       </form>
+      {isLoading && (
+        <div className="absolute inset-0 bg-white/80 flex items-center justify-center">
+          <div className="animate-spin h-8 w-8 border-4 border-primary border-t-transparent rounded-full" />
+        </div>
+      )}
+
       {error && (
-        <div className="p-4 bg-red-50 text-red-600 rounded-md">
+        <div className="p-4 mb-4 bg-red-50 text-red-600 rounded-md">
           {error}
         </div>
       )}
