@@ -95,6 +95,7 @@ export const BookingForm = ({ onSearchComplete }: BookingFormProps) => {
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [searchingDriver, setSearchingDriver] = useState(false);
   const [searchStep, setSearchStep] = useState<number>(0);
+  const [error, setError] = useState<string | null>(null);
 
   const debouncedDepartQuery = useDebounce(departQuery, 300);
   const debouncedArriveeQuery = useDebounce(arriveeQuery, 300);
@@ -184,46 +185,75 @@ export const BookingForm = ({ onSearchComplete }: BookingFormProps) => {
         options: ['climatisation']
       };
 
+      console.log('🚗 Paramètres envoyés:', params);
+
       console.log('🚗 Envoi requête prix:', {
         ...params,
         date: new Date(date).toLocaleDateString('fr-FR') // Format lisible de la date
       });
 
       const response = await prixAPI.calculerPrix(params);
-      console.log('📦 Réponse API:', response.data);
+      
+      // Logs détaillés
+      console.log('🌍 Environnement:', import.meta.env.MODE);
+      console.log('🔗 API URL:', import.meta.env.VITE_API_URL);
+      console.log('📦 Réponse API complète:', {
+        status: response.status,
+        statusText: response.statusText,
+        headers: response.headers,
+        data: response.data
+      });
 
       if (response.data.status === "success") {
-        // Vérification de la structure de la réponse
-        if (!response.data.data) {
-          throw new Error('Données manquantes dans la réponse');
+        const estimationData = response.data.data;
+        
+        // Vérification plus stricte
+        if (!estimationData?.details?.supplements) {
+          console.error('❌ Structure invalide:', estimationData);
+          throw new Error('Structure de réponse invalide');
         }
 
-        const estimationData = response.data.data;
         console.log('🔍 Données reçues:', estimationData);
 
-        // Adaptation du format des données reçues au format attendu par l'interface
+        // Vérification détaillée de la structure
+        if (!estimationData.details) {
+          throw new Error('Details manquants dans la réponse');
+        }
+
+        // Création d'un objet supplements par défaut si manquant
+        const supplements = estimationData.details.supplements || {
+          passagers: '0',
+          climatisation: '0'
+        };
+
         const formattedEstimation = {
-          prixBase: Number(estimationData.details.prixBase),
-          fraisService: 0, // À définir selon votre logique
-          total: Number(estimationData.montant),
+          prixBase: Number(estimationData.details.prixBase || 0),
+          fraisService: 0,
+          total: Number(estimationData.montant || 0),
           detail: {
-            distance: Number(estimationData.details.distance),
-            duree: Number(estimationData.details.duree),
+            distance: Number(estimationData.details.distance || 0),
+            duree: Number(estimationData.details.duree || 0),
             majorations: {
-              passagers: estimationData.details.supplements.passagers,
-              climatisation: estimationData.details.supplements.climatisation
+              passagers: supplements.passagers || '0',
+              climatisation: supplements.climatisation || '0'
             }
           }
         };
 
         console.log('✅ Estimation formatée:', formattedEstimation);
         setEstimation(formattedEstimation);
+      } else {
+        throw new Error('Réponse API invalide');
       }
     } catch (error: any) {
-      console.error('❌ Erreur estimation:', {
+      console.error('❌ Erreur complète:', {
         message: error.message,
-        response: error.response?.data
+        stack: error.stack,
+        response: error.response,
+        request: error.request
       });
+      // Gérer l'erreur de manière plus visible pour l'utilisateur
+      // setError(error.message);
     }
   };
 
@@ -338,32 +368,6 @@ export const BookingForm = ({ onSearchComplete }: BookingFormProps) => {
                   ))}
                 </ul>
               )}
-            </div>
-          </div>
-        )}
-
-        {/* Étape 3: Affichage de l'estimation */}
-        {estimation && (currentStep === 'estimation' || currentStep === 'reservation') && (
-          <div className="mt-4 p-4 bg-gray-50 rounded-lg animate-fade-in">
-            <h4 className="font-medium text-gray-900">Estimation</h4>
-            <div className="mt-2 space-y-1 text-sm text-gray-600">
-              <p>Prix de base : {Number(estimation.prixBase).toFixed(2)} DT</p>
-              <p>Frais de service : {Number(estimation.fraisService).toFixed(2)} DT</p>
-              
-              {Object.entries(estimation.detail.majorations || {}).map(([type, value]) => (
-                <p key={type}>
-                  Majoration {type} : +{((Number(value) - 1) * 100).toFixed(0)}%
-                </p>
-              ))}
-
-              <div className="border-t border-gray-200 my-2 pt-2">
-                <p>Distance : {Number(estimation.detail.distance).toFixed(1)} km</p>
-                <p>Durée estimée : {Math.round(estimation.detail.duree)} min</p>
-        </div>
-
-              <p className="text-lg font-semibold text-primary mt-2">
-                Total : {Number(estimation.total).toFixed(2)} DT
-              </p>
             </div>
           </div>
         )}
@@ -617,6 +621,11 @@ export const BookingForm = ({ onSearchComplete }: BookingFormProps) => {
           </Button>
         )}
       </form>
+      {error && (
+        <div className="p-4 bg-red-50 text-red-600 rounded-md">
+          {error}
+        </div>
+      )}
     </div>
   );
 };
