@@ -44,9 +44,9 @@ interface EstimationResponse {
     details: {
       prixBase: number;
       distance: number;
-      supplements: {
-        passagers: string;
-        climatisation: string;
+      supplements?: {
+        passagers?: string;
+        climatisation?: string;
       };
       duree: number;
     };
@@ -96,6 +96,7 @@ export const BookingForm = ({ onSearchComplete }: BookingFormProps) => {
   const [searchingDriver, setSearchingDriver] = useState(false);
   const [searchStep, setSearchStep] = useState<number>(0);
   const [error, setError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
 
   const debouncedDepartQuery = useDebounce(departQuery, 300);
   const debouncedArriveeQuery = useDebounce(arriveeQuery, 300);
@@ -165,6 +166,7 @@ export const BookingForm = ({ onSearchComplete }: BookingFormProps) => {
       }
     });
 
+    setIsLoading(true);
     try {
       // Validation des coordonnées
       if (!selectedDepartCity.coordinates || !selectedCity.coordinates) {
@@ -194,6 +196,17 @@ export const BookingForm = ({ onSearchComplete }: BookingFormProps) => {
 
       const response = await prixAPI.calculerPrix(params);
       
+      // Log pour déboguer en production
+      console.log('🌍 API Response:', {
+        url: import.meta.env.VITE_API_URL,
+        params,
+        response: response.data
+      });
+
+      if (!response?.data?.data?.details?.supplements) {
+        throw new Error('Structure de réponse invalide');
+      }
+
       // Logs détaillés
       console.log('🌍 Environnement:', import.meta.env.MODE);
       console.log('🔗 API URL:', import.meta.env.VITE_API_URL);
@@ -246,14 +259,14 @@ export const BookingForm = ({ onSearchComplete }: BookingFormProps) => {
         throw new Error('Réponse API invalide');
       }
     } catch (error: any) {
-      console.error('❌ Erreur complète:', {
+      console.error('❌ Erreur détaillée:', {
         message: error.message,
-        stack: error.stack,
-        response: error.response,
-        request: error.request
+        response: error.response?.data,
+        config: error.config
       });
-      // Gérer l'erreur de manière plus visible pour l'utilisateur
-      // setError(error.message);
+      setError(error.message); // Afficher l'erreur à l'utilisateur
+    } finally {
+      setIsLoading(false);
     }
   };
 
