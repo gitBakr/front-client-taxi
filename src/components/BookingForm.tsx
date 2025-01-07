@@ -202,38 +202,48 @@ export const BookingForm = ({ onSearchComplete }: BookingFormProps) => {
       console.log('📦 Réponse API brute:', {
         status: response?.status,
         data: response?.data,
-        details: response?.data?.data?.details
+        details: response?.data?.data
       });
 
       // Vérification plus précise de la structure
-      if (!response?.data?.status === "success") {
+      if (response?.data?.status !== "success") {
         throw new Error('Réponse API non valide');
       }
 
       const estimationData = response.data.data;
+      console.log('🔍 Données estimation:', estimationData);
 
       // Vérification de la structure des données
-      if (!estimationData?.details) {
-        console.error('❌ Données manquantes:', estimationData);
+      if (!estimationData) {
+        console.error('❌ Données manquantes:', response.data);
         throw new Error('Données de prix manquantes');
       }
 
-      // Formatage avec valeurs par défaut
+      // Formatage avec vérification des valeurs
       const formattedEstimation = {
-        prixBase: Number(estimationData.details.prixBase || 0),
-        fraisService: 0,
-        total: Number(estimationData.montant || 0),
+        prixBase: Number(estimationData.prixBase) || 0,
+        fraisService: Number(estimationData.fraisService) || 0,
+        total: Number(estimationData.montant) || 0,
         detail: {
-          distance: Number(estimationData.details.distance || 0),
-          duree: Number(estimationData.details.duree || 0),
+          distance: Number(estimationData.distance) || 0,
+          duree: Number(estimationData.duree) || 0,
           majorations: {
-            passagers: estimationData.details.supplements?.passagers || '0',
-            climatisation: estimationData.details.supplements?.climatisation || '0'
+            passagers: estimationData.supplements?.passagers || '1',
+            climatisation: estimationData.supplements?.climatisation || '1'
           }
         }
       };
 
-      console.log('✅ Estimation formatée:', formattedEstimation);
+      // Vérification des valeurs formatées
+      console.log('✅ Estimation formatée:', {
+        original: estimationData,
+        formatted: formattedEstimation
+      });
+
+      if (formattedEstimation.total === 0) {
+        console.warn('⚠️ Prix total à 0, données originales:', estimationData);
+      }
+
       setEstimation(formattedEstimation);
 
     } catch (error: any) {
