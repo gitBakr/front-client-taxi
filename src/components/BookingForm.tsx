@@ -13,6 +13,25 @@ interface BookingFormProps {
   onSearchComplete?: () => void;
 }
 
+// Ajout des interfaces pour typer la réponse
+interface EstimationResponse {
+  status: 'success' | 'error';
+  data: {
+    montant: number;
+    details: {
+      prixBase: number;
+      distance: number;
+      duree: number;
+      supplements: {
+        passagers: string;
+        climatisation: string;
+      };
+      villeDepart: string;
+      villeArrivee: string;
+    };
+  };
+}
+
 export const BookingForm: React.FC<BookingFormProps> = ({ onSearchComplete }) => {
   // États pour les villes
   const [departQuery, setDepartQuery] = useState('');
@@ -86,8 +105,11 @@ export const BookingForm: React.FC<BookingFormProps> = ({ onSearchComplete }) =>
 
       console.log('📊 Réponse estimation:', response);
 
-      if (response.data?.status === 'success' && response.data?.data) {
-        const estimationData = response.data.data;
+      // Typage de la réponse
+      const estimationResponse = response.data as EstimationResponse;
+
+      if (estimationResponse.status === 'success' && estimationResponse.data) {
+        const estimationData = estimationResponse.data;
         console.log('📊 Données estimation:', estimationData);
 
         setEstimation(estimationData);

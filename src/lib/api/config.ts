@@ -11,17 +11,11 @@ export const config = {
 };
 
 // Logs de configuration
-console.log('🌍 Configuration API:', {
-  environment: import.meta.env.MODE,
-  apiUrl: API_URL,
-  fullUrl: `${API_URL}/api`,
-  isDevelopment: import.meta.env.DEV,
-  isProduction: import.meta.env.PROD
-});
+console.log('🌍 Configuration API:', config);
 
 // Instance Axios avec configuration
 export const api = axios.create({
-  baseURL: `${API_URL}/api`,
+  baseURL: apiUrl,
   timeout: 5000,
   headers: {
     'Content-Type': 'application/json',
@@ -35,7 +29,7 @@ api.interceptors.request.use(request => {
   console.log('🚀 Requête sortante:', {
     method: request.method,
     url: request.url,
-    fullUrl: `${API_URL}/api${request.url}`,
+    fullUrl: `${apiUrl}${request.url}`,
     params: request.params,
     headers: request.headers
   });
@@ -45,7 +39,6 @@ api.interceptors.request.use(request => {
 // Intercepteur pour les réponses
 api.interceptors.response.use(
   response => {
-    // Log détaillé de la réponse
     console.log('📥 Réponse entrante:', {
       status: response.status,
       url: response.config.url,
@@ -54,7 +47,6 @@ api.interceptors.response.use(
     return response;
   },
   error => {
-    // Log détaillé des erreurs
     console.error('❌ Erreur API:', {
       message: error.message,
       status: error.response?.status,
