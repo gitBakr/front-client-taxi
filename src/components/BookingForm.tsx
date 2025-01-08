@@ -198,37 +198,52 @@ export const BookingForm = ({ onSearchComplete }: BookingFormProps) => {
 
       const response = await prixAPI.calculerPrix(params);
       
-      console.log('📦 Réponse API complète:', response.data);
+      console.log('🔍 Réponse API brute:', response.data);
 
-      const estimationData = response.data.data?.details;
-      
-      if (!estimationData) {
-        throw new Error('Données de prix manquantes dans la réponse');
+      // Vérification de la structure
+      if (!response.data?.data) {
+        throw new Error('Données manquantes dans la réponse');
       }
 
-      // Formatage avec la bonne structure
+      const data = response.data.data;
+      console.log('📊 Données reçues:', data);
+
+      // Formatage avec la structure correcte
       const formattedEstimation = {
-        prixBase: Number(estimationData.prixBase) || 0,
-        fraisService: Number(estimationData.fraisService) || 0,
-        total: Number(estimationData.total) || 0,
+        prixBase: Number(data.details.prixBase || 0) * data.details.distance, // Prix de base total
+        fraisService: Number(data.details.fraisService || 0),
+        total: Number(data.montant || 0), // Déjà le montant total
         detail: {
-          distance: Number(estimationData.distance) || 0,
-          duree: Number(estimationData.duree) || 0,
+          distance: Number(data.details.distance || 0),
+          duree: Number(data.details.duree || 0),
           majorations: {
-            passagers: estimationData.supplements?.passagers || '1',
-            climatisation: estimationData.supplements?.climatisation || '1'
+            passagers: data.details.supplements?.passagers || '1',
+            climatisation: data.details.supplements?.climatisation || '1'
           }
         }
       };
 
-      // Vérification plus stricte des valeurs
-      if (formattedEstimation.total === 0) {
-        console.error('❌ Données de prix invalides:', {
-          original: response.data,
-          formatted: formattedEstimation
-        });
-        throw new Error('Le calcul du prix a échoué');
+      // Ajout de logs pour vérifier les calculs
+      console.log('💰 Détails du calcul:', {
+        distanceKm: formattedEstimation.detail.distance,
+        dureeMin: formattedEstimation.detail.duree,
+        prixParKm: data.details.prixBase,
+        prixBaseTotal: formattedEstimation.prixBase,
+        total: formattedEstimation.total,
+        supplements: data.details.supplements
+      });
+
+      // Vérification du prix minimum
+      if (formattedEstimation.total < 5) { // Prix minimum de 5 DT
+        console.error('❌ Prix trop bas:', formattedEstimation);
+        throw new Error('Le prix calculé est trop bas');
       }
+
+      console.log('💰 Prix calculé:', {
+        base: formattedEstimation.prixBase,
+        frais: formattedEstimation.fraisService,
+        total: formattedEstimation.total
+      });
 
       setEstimation(formattedEstimation);
 
@@ -236,7 +251,8 @@ export const BookingForm = ({ onSearchComplete }: BookingFormProps) => {
       const errorMessage = error.response?.data?.message || error.message || 'Erreur lors du calcul du prix';
       console.error('❌ Erreur estimation:', {
         message: errorMessage,
-        response: error.response?.data
+        response: error.response?.data,
+        originalError: error
       });
       setError(errorMessage);
     } finally {
