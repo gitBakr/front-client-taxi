@@ -220,8 +220,8 @@ export const BookingForm: React.FC<BookingFormProps> = ({ onSearchComplete }) =>
   }, [departQuery, arriveeQuery]);
 
   return (
-    <div className="w-full max-w-md bg-white rounded-xl shadow-lg p-6">
-      <h3 className="text-lg font-semibold mb-4">Estimation de trajet</h3>
+    <div className="w-full bg-white rounded-xl shadow-lg p-4 sm:p-6 md:p-8">
+      <h3 className="text-lg sm:text-xl font-semibold mb-4">Estimation de trajet</h3>
       
       <form className="space-y-4" onSubmit={handleSubmit}>
         {/* Ville de départ */}
@@ -339,9 +339,9 @@ export const BookingForm: React.FC<BookingFormProps> = ({ onSearchComplete }) =>
             />
 
             {/* Choix du mode de paiement */}
-            <div className="mt-4">
+            <div className="mt-4 sm:mt-6">
               <Label>Mode de paiement</Label>
-              <div className="grid grid-cols-2 gap-2 mt-2">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-4">
                 <Button 
                   type="button"
                   variant={paymentMethod === 'card' ? 'default' : 'outline'}

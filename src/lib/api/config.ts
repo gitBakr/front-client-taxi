@@ -25,7 +25,11 @@ export const api = axios.create({
 
 // Intercepteur pour les requêtes
 api.interceptors.request.use(request => {
-  // Log détaillé de la requête
+  // Ajout de /api si nécessaire
+  if (request.url && !request.url.startsWith('/api/')) {
+    request.url = `/api${request.url}`;
+  }
+
   console.log('🚀 Requête sortante:', {
     method: request.method,
     url: request.url,
