@@ -415,6 +415,17 @@ export const BookingForm = ({ onSearchComplete }: BookingFormProps) => {
                     className="w-full pl-10 h-10 rounded-md border border-input bg-background"
                     placeholderText="Sélectionnez une date"
                     showPopperArrow={false}
+                    popperModifiers={[
+                      {
+                        name: 'preventOverflow',
+                        options: {
+                          rootBoundary: 'viewport',
+                          tether: false,
+                          altAxis: true
+                        }
+                      }
+                    ]}
+                    popperPlacement="bottom-start"
                     customInput={
                       <input
                         className="w-full pl-10 h-10 rounded-md border border-input bg-background"
@@ -508,6 +519,17 @@ export const BookingForm = ({ onSearchComplete }: BookingFormProps) => {
                     className="w-full pl-10 h-10 rounded-md border border-input bg-background"
                     placeholderText="Sélectionnez une date"
                     showPopperArrow={false}
+                    popperModifiers={[
+                      {
+                        name: 'preventOverflow',
+                        options: {
+                          rootBoundary: 'viewport',
+                          tether: false,
+                          altAxis: true
+                        }
+                      }
+                    ]}
+                    popperPlacement="bottom-start"
                     customInput={
                       <input
                         className="w-full pl-10 h-10 rounded-md border border-input bg-background"
