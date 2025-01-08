@@ -1,7 +1,11 @@
 import axios from 'axios';
 
+const API_URL = import.meta.env.VITE_API_URL || 'https://backend-taxi-e2lz.onrender.com';
+
+console.log('🔗 API URL utilisée:', API_URL); // Pour déboguer
+
 const api = axios.create({
-    baseURL: import.meta.env.VITE_API_URL + '/api',
+    baseURL: `${API_URL}/api`,
     headers: {
         'Content-Type': 'application/json'
     }
