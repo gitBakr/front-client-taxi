@@ -251,10 +251,10 @@ export const BookingForm = ({ onSearchComplete }: BookingFormProps) => {
         supplements: data.details.supplements
       });
 
-      // Vérification du prix minimum
-      if (formattedEstimation.total < 5) { // Prix minimum de 5 DT
-        console.error('❌ Prix trop bas:', formattedEstimation);
-        throw new Error('Le prix calculé est trop bas');
+      // Vérification du prix minimum (changeons le seuil à 1 DT)
+      if (formattedEstimation.total < 1) {
+        console.error('❌ Prix invalide:', formattedEstimation);
+        throw new Error('Prix invalide');
       }
 
       console.log('💰 Prix calculé:', {
@@ -415,6 +415,10 @@ export const BookingForm = ({ onSearchComplete }: BookingFormProps) => {
                     className="w-full pl-10 h-10 rounded-md border border-input bg-background"
                     placeholderText="Sélectionnez une date"
                     showPopperArrow={false}
+                    popperProps={{
+                      positionFixed: true,
+                      strategy: "fixed"
+                    }}
                     popperModifiers={[
                       {
                         name: 'preventOverflow',
@@ -519,6 +523,10 @@ export const BookingForm = ({ onSearchComplete }: BookingFormProps) => {
                     className="w-full pl-10 h-10 rounded-md border border-input bg-background"
                     placeholderText="Sélectionnez une date"
                     showPopperArrow={false}
+                    popperProps={{
+                      positionFixed: true,
+                      strategy: "fixed"
+                    }}
                     popperModifiers={[
                       {
                         name: 'preventOverflow',
