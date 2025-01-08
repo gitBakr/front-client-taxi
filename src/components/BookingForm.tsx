@@ -1,141 +1,127 @@
-import { Calendar, MapPin, Users, Clock } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useDebounce } from '@/hooks/useDebounce';
-import { villeAPI, prixAPI } from '@/lib/api';
-import {
-  AlertDialog,
-  AlertDialogContent,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogAction,
-  AlertDialogCancel,
-} from "@/components/ui/alert-dialog";
-import DatePicker from 'react-datepicker';
-import "react-datepicker/dist/react-datepicker.css";
-
-interface City {
-  _id: string;
-  nom: string;
-  gouvernorat: string;
-  region: string;
-  coordinates: {
-    latitude: number;
-    longitude: number;
-  };
-}
+import { City } from '@/lib/api/types';
+import { villeAPI } from '@/lib/api/ville';
+import { prixAPI } from '@/lib/api/prix';
+import { CitySelect } from './CitySelect';
+import { Label } from './ui/label';
+import { Button } from './ui/button';
+import { DateTimePicker } from './DateTimePicker';
+import { useNavigate } from 'react-router-dom';
 
 interface BookingFormProps {
-  onSearchComplete: (result: {
-    price: number;
-    duration: string;
-    distance: string;
-  }) => void;
+  onSearchComplete?: () => void;
 }
 
-interface EstimationResponse {
-  status: string;
-  data: {
-    montant: number;
-    details: {
-      prixBase: number;
-      distance: number;
-      supplements?: {
-        passagers?: string;
-        climatisation?: string;
-      };
-      duree: number;
-    };
-  };
-}
-
-interface APIResponse<T> {
-  status: string;
-  data: T;
-}
-
-interface VilleSearchResponse {
-  data: City[];
-}
-
-// Ajoutons une fonction utilitaire pour formater la durée
-const formatDuration = (minutes: number): string => {
-  const hours = Math.floor(minutes / 60);
-  const remainingMinutes = minutes % 60;
-  
-  if (hours > 0) {
-    return `${hours}h${remainingMinutes > 0 ? ` ${remainingMinutes}min` : ''}`;
-  }
-  return `${remainingMinutes}min`;
-};
-
-interface EstimationState {
-  prixParKm: number;
-  prixBase: number;
-  fraisService: number;
-  total: number;
-  detail: {
-    distance: number;
-    duree: string;
-    majorations: {
-      climatisation?: number;
-      nuit?: number;
-    };
-  };
-}
-
-export const BookingForm = ({ onSearchComplete }: BookingFormProps) => {
+export const BookingForm: React.FC<BookingFormProps> = ({ onSearchComplete }) => {
+  // États pour les villes
   const [departQuery, setDepartQuery] = useState('');
   const [arriveeQuery, setArriveeQuery] = useState('');
   const [departSuggestions, setDepartSuggestions] = useState<City[]>([]);
   const [arriveeSuggestions, setArriveeSuggestions] = useState<City[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [passengers, setPassengers] = useState(1);
-  const [date, setDate] = useState(() => {
-    const today = new Date();
-    return today.toISOString().split('T')[0];
-  });
-  const [estimation, setEstimation] = useState<EstimationState | null>(null);
-  const [showDialog, setShowDialog] = useState(false);
   const [selectedDepartCity, setSelectedDepartCity] = useState<City | null>(null);
-  const [selectedArriveeCity, setSelectedArriveeCity] = useState<City | null>(null);
-  const [currentStep, setCurrentStep] = useState<'depart' | 'arrivee' | 'choixType' | 'details' | 'estimation' | 'reservation'>('depart');
-  const [isQuickEstimate, setIsQuickEstimate] = useState(false);
-  const [reservationType, setReservationType] = useState<'immediate' | 'scheduled'>('immediate');
-  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
-  const [searchingDriver, setSearchingDriver] = useState(false);
-  const [searchStep, setSearchStep] = useState<number>(0);
+  const [selectedArriveCity, setSelectedArriveCity] = useState<City | null>(null);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
-  const [prixParKm, setPrixParKm] = useState<number>(0);
+  const [isReservationStarted, setIsReservationStarted] = useState(false);
+  const [paymentMethod, setPaymentMethod] = useState<'card' | 'cash' | null>(null);
 
+  // Debounce des recherches
   const debouncedDepartQuery = useDebounce(departQuery, 300);
   const debouncedArriveeQuery = useDebounce(arriveeQuery, 300);
 
-  const searchMessages = [
-    "Recherche des chauffeurs disponibles...",
-    "Vérification des disponibilités...",
-    "Calcul de l'itinéraire optimal...",
-    "Confirmation du trajet..."
-  ];
+  // État pour l'estimation
+  const [estimation, setEstimation] = useState<{
+    montant: number;
+    details: {
+      prixBase: number;
+      distance: number;
+      duree: number;
+      supplements: {
+        passagers: string;
+        climatisation: string;
+      };
+      villeDepart: string;
+      villeArrivee: string;
+    };
+  } | null>(null);
 
-  // Recherche des villes pour le départ
+  // Ajout des états pour la date et l'heure
+  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+  const [selectedTime, setSelectedTime] = useState('12:00');
+
+  const navigate = useNavigate();
+
+  const handlePaymentContinue = () => {
+    const bookingData = {
+      depart: selectedDepartCity,
+      arrivee: selectedArriveCity,
+      date: selectedDate,
+      time: selectedTime,
+      estimation: estimation,
+    };
+
+    if (paymentMethod === 'card') {
+      navigate('/payment/stripe', { state: bookingData });
+    } else {
+      navigate('/driver/details', { state: bookingData });
+    }
+  };
+
+  // Fonction d'estimation
+  const estimatePrice = async () => {
+    if (!selectedDepartCity || !selectedArriveCity) return;
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      const response = await prixAPI.calculerPrix({
+        depart: selectedDepartCity,
+        arrivee: selectedArriveCity,
+        passagers: 1,
+        date: new Date().toISOString().split('T')[0],
+        options: []
+      });
+
+      console.log('📊 Réponse estimation:', response);
+
+      if (response.data?.status === 'success' && response.data?.data) {
+        const estimationData = response.data.data;
+        console.log('📊 Données estimation:', estimationData);
+
+        setEstimation(estimationData);
+        onSearchComplete?.();
+      } else {
+        console.warn('⚠️ Format de réponse incorrect:', response);
+        setError('Format de réponse incorrect');
+      }
+    } catch (error) {
+      console.error('❌ Erreur estimation:', error);
+      setError('Erreur lors du calcul de l\'estimation');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Recherche des villes de départ
   useEffect(() => {
     const searchCities = async () => {
-      if (!debouncedDepartQuery) return;
-      
+      if (!debouncedDepartQuery || debouncedDepartQuery.length < 2) {
+        setDepartSuggestions([]);
+        return;
+      }
+
       setLoading(true);
+      setError(null);
       try {
-        const response = await villeAPI.search(debouncedDepartQuery) as APIResponse<VilleSearchResponse>;
-        if (response.data.status === "success") {
-          setDepartSuggestions(response.data.data);
+        const response = await villeAPI.search(debouncedDepartQuery);
+        if (response.status === 'success') {
+          setDepartSuggestions(response.data);
         }
       } catch (error) {
-        console.error('Erreur lors de la recherche:', error);
+        console.error('❌ Erreur recherche départ:', error);
+        setError('Erreur lors de la recherche des villes');
       } finally {
         setLoading(false);
       }
@@ -144,559 +130,232 @@ export const BookingForm = ({ onSearchComplete }: BookingFormProps) => {
     searchCities();
   }, [debouncedDepartQuery]);
 
-  // Recherche des villes pour l'arrivée
+  // Recherche des villes d'arrivée
   useEffect(() => {
     const searchCities = async () => {
-      if (!debouncedArriveeQuery) return;
-      
+      if (!debouncedArriveeQuery || debouncedArriveeQuery.length < 2) {
+        setArriveeSuggestions([]);
+        return;
+      }
+
+      setError(null);
       try {
         const response = await villeAPI.search(debouncedArriveeQuery);
-        if (response.data.status === "success") {
-          setArriveeSuggestions(response.data.data);
+        if (response.status === 'success') {
+          setArriveeSuggestions(response.data);
         }
       } catch (error) {
-        console.error('Erreur lors de la recherche:', error);
+        console.error('❌ Erreur recherche arrivée:', error);
+        setError('Erreur lors de la recherche des villes');
       }
     };
 
     searchCities();
   }, [debouncedArriveeQuery]);
 
-  // Estimation instantanée quand une ville est sélectionnée
-  const estimatePrix = async (selectedCity: City) => {
-    setIsLoading(true);
+  // Gestion de la sélection des villes
+  const handleCitySelect = (city: City, type: 'depart' | 'arrivee') => {
     setError(null);
-
-    try {
-      if (!selectedDepartCity || !selectedCity) {
-        console.warn('❌ Villes manquantes:', { 
-          depart: selectedDepartCity?.nom, 
-          arrivee: selectedCity?.nom 
-        });
-        return;
+    if (type === 'depart') {
+      setSelectedDepartCity(city);
+      setDepartQuery(city.nom);
+      setDepartSuggestions([]);
+    } else {
+      setSelectedArriveCity(city);
+      setArriveeQuery(city.nom);
+      setArriveeSuggestions([]);
+      if (selectedDepartCity) {
+        estimatePrice();
       }
-
-      console.log('📍 Début estimation avec:', {
-        depart: selectedDepartCity.nom,
-        arrivee: selectedCity.nom,
-        coordinates: {
-          depart: selectedDepartCity.coordinates,
-          arrivee: selectedCity.coordinates
-        }
-      });
-
-      // Validation des coordonnées
-      if (!selectedDepartCity.coordinates || !selectedCity.coordinates) {
-        throw new Error('Coordonnées manquantes pour une des villes');
-      }
-
-      const params = {
-        depart: {
-          nom: selectedDepartCity.nom,
-          coordinates: selectedDepartCity.coordinates
-        },
-        arrivee: {
-          nom: selectedCity.nom,
-          coordinates: selectedCity.coordinates
-        },
-        passagers: passengers,
-        date: date,
-        options: ['climatisation']
-      };
-
-      console.log('🚗 Paramètres envoyés:', params);
-
-      console.log('🚗 Envoi requête prix:', {
-        ...params,
-        date: new Date(date).toLocaleDateString('fr-FR') // Format lisible de la date
-      });
-
-      const response = await prixAPI.calculerPrix(params);
-      
-      console.log('🔍 Réponse API brute:', response.data);
-
-      // Vérification de la structure
-      if (!response.data?.data) {
-        throw new Error('Données manquantes dans la réponse');
-      }
-
-      const data = response.data.data;
-      console.log('📊 Données reçues:', data);
-
-      // Vérification de la structure complète
-      if (!data?.details?.prixBase || !data?.details?.distance) {
-        console.error('❌ Structure de la réponse:', {
-          data,
-          details: data?.details,
-          hasPrice: !!data?.details?.prixBase,
-          hasDistance: !!data?.details?.distance,
-          raw: response.data
-        });
-        throw new Error('Structure de réponse invalide');
-      }
-
-      const prixParKm = Number(data.details.prixBase);
-      const distance = Number(data.details.distance);
-
-      // Vérification des valeurs numériques
-      if (isNaN(prixParKm) || isNaN(distance)) {
-        console.error('❌ Valeurs invalides:', { prixParKm, distance });
-        throw new Error('Valeurs de prix invalides');
-      }
-
-      setPrixParKm(prixParKm);
-
-      // Calcul avec vérification
-      const prixBase = prixParKm * distance;
-      if (isNaN(prixBase)) {
-        throw new Error('Erreur dans le calcul du prix');
-      }
-
-      const formattedEstimation = {
-        prixParKm,
-        prixBase,
-        fraisService: Number(data.details.fraisService || 0),
-        total: Number(data.montant || prixBase), // Fallback sur prixBase si montant non disponible
-        detail: {
-          distance,
-          duree: formatDuration(Number(data.details.duree || 0)),
-          majorations: {
-            passagers: data.details.supplements?.passagers || '1',
-            climatisation: data.details.supplements?.climatisation || '1'
-          }
-        }
-      };
-
-      // Log détaillé des calculs
-      console.log('💰 Calculs détaillés:', {
-        prixParKm,
-        distance,
-        prixBase,
-        total: formattedEstimation.total,
-        calcul: `${prixParKm} DT/km × ${distance} km = ${prixBase} DT`
-      });
-
-      setEstimation(formattedEstimation);
-
-    } catch (error: any) {
-      const errorMessage = error.response?.data?.message || error.message || 'Erreur lors du calcul du prix';
-      console.error('❌ Erreur estimation:', {
-        message: errorMessage,
-        response: error.response?.data,
-        originalError: error
-      });
-      setError(errorMessage);
-    } finally {
-      setIsLoading(false);
     }
   };
 
+  // Gestion de la soumission
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setShowDialog(true);
-  };
-
-  // Valeurs par défaut
-  const defaultValues = {
-    date: new Date().toISOString().split('T')[0],
-    passengers: 1
-  };
-
-  // Fonction pour passer à l'étape suivante
-  const goToNextStep = () => {
-    switch (currentStep) {
-      case 'depart':
-        if (selectedDepartCity) {
-          setCurrentStep('arrivee');
-        }
-        break;
-      case 'arrivee':
-        if (selectedArriveeCity) {
-          setCurrentStep('choixType');
-        }
-        break;
+    if (!selectedDepartCity || !selectedArriveCity) {
+      setError('Veuillez sélectionner les villes de départ et d\'arrivée');
+      return;
     }
+    await estimatePrice();
   };
+
+  // Fonction utilitaire pour formater la durée
+  const formatDuree = (minutes: number) => {
+    const heures = Math.floor(minutes / 60);
+    const mins = minutes % 60;
+    return `${heures}h${mins.toString().padStart(2, '0')}`;
+  };
+
+  // Fonction utilitaire pour arrondir la distance
+  const formatDistance = (distance: number) => {
+    return Math.round(distance);
+  };
+
+  // Ajouter aussi un effet pour réinitialiser quand les requêtes changent
+  useEffect(() => {
+    setEstimation(null);
+  }, [departQuery, arriveeQuery]);
 
   return (
     <div className="w-full max-w-md bg-white rounded-xl shadow-lg p-6">
       <h3 className="text-lg font-semibold mb-4">Estimation de trajet</h3>
+      
       <form className="space-y-4" onSubmit={handleSubmit}>
-        {/* Étape 1: Ville de départ */}
+        {/* Ville de départ */}
         <div className="space-y-2">
           <Label>Ville de départ</Label>
-          <div className="relative">
-            <MapPin className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-            <Input 
-              id="departure" 
-              className="pl-10" 
-              placeholder="D'où partez-vous ?"
-              value={departQuery}
-              onChange={(e) => setDepartQuery(e.target.value)}
-            />
-            {loading && (
-              <div className="absolute right-3 top-3">
-                <div className="animate-spin h-4 w-4 border-2 border-primary border-t-transparent rounded-full" />
-              </div>
-            )}
-            {departSuggestions.length > 0 && (
-              <ul className="absolute z-10 w-full bg-white border rounded-md mt-1 shadow-lg max-h-60 overflow-auto">
-                {departSuggestions.map((city) => (
-                  <li
-                    key={city._id}
-                    className="p-2 hover:bg-gray-50 cursor-pointer"
-                    onClick={() => {
-                      console.log('🏁 Sélection ville départ:', city);
-                      setDepartQuery(city.nom);
-                      setSelectedDepartCity(city);
-                      setDepartSuggestions([]);
-                    }}
-                  >
-                    {city.nom}
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
+          <CitySelect
+            id="depart"
+            value={departQuery}
+            onChange={setDepartQuery}
+            onSelect={(city) => handleCitySelect(city, 'depart')}
+            suggestions={departSuggestions}
+            placeholder="Ville de départ"
+            label="Départ"
+          />
         </div>
 
-        {/* Étape 2: Ville d'arrivée */}
-        {currentStep !== 'depart' && (
-          <div className="space-y-2 animate-fade-in">
-            <Label>Ville d'arrivée</Label>
-          <div className="relative">
-            <MapPin className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-              <Input 
-                id="arrival" 
-                className="pl-10" 
-                placeholder="Où allez-vous ?"
-                value={arriveeQuery}
-                onChange={(e) => setArriveeQuery(e.target.value)}
-              />
-              {arriveeSuggestions.length > 0 && (
-                <ul className="absolute z-10 w-full bg-white border rounded-md mt-1 shadow-lg max-h-60 overflow-auto">
-                  {arriveeSuggestions.map((city) => (
-                    <li
-                      key={city._id}
-                      className="p-2 hover:bg-gray-50 cursor-pointer"
-                      onClick={() => {
-                        console.log('🎯 Sélection ville arrivée:', city);
-                        setArriveeQuery(city.nom);
-                        setSelectedArriveeCity(city);
-                        setArriveeSuggestions([]);
-                        
-                        // Vérifier que nous avons bien la ville de départ
-                        if (selectedDepartCity) {
-                          console.log('🚗 Calcul estimation avec:', {
-                            depart: selectedDepartCity.nom,
-                            arrivee: city.nom
-                          });
-                          estimatePrix(city);
-                        } else {
-                          console.warn('⚠️ Ville de départ non sélectionnée');
-                        }
-                      }}
-                    >
-                      {city.nom}
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* Étape 4: Champs de réservation */}
-        {currentStep === 'reservation' && (
-          <div className="space-y-4 animate-fade-in">
-        <div className="grid grid-cols-2 gap-4">
-          <div className="space-y-2">
-            <Label htmlFor="date">Date</Label>
-            <div className="relative">
-                  <Calendar className="absolute left-3 top-3 h-4 w-4 text-gray-400 z-10" />
-                  <DatePicker
-                    selected={selectedDate}
-                    onChange={(date: Date) => {
-                      setSelectedDate(date);
-                      setDate(date.toISOString().split('T')[0]);
-                      if (selectedDepartCity && selectedArriveeCity) {
-                        estimatePrix(selectedArriveeCity);
-                      }
-                    }}
-                    minDate={new Date()}
-                    dateFormat="dd/MM/yyyy"
-                    className="w-full pl-10 h-10 rounded-md border border-input bg-background"
-                    placeholderText="Sélectionnez une date"
-                    showPopperArrow={false}
-                    popperProps={{
-                      positionFixed: true,
-                      strategy: "fixed"
-                    }}
-                    popperModifiers={[
-                      {
-                        name: 'preventOverflow',
-                        options: {
-                          rootBoundary: 'viewport',
-                          tether: false,
-                          altAxis: true
-                        }
-                      }
-                    ]}
-                    popperPlacement="bottom-start"
-                    customInput={
-                      <input
-                        className="w-full pl-10 h-10 rounded-md border border-input bg-background"
-                      />
-                    }
-                  />
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="passengers">Passagers</Label>
-            <div className="relative">
-              <Users className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-                  <select 
-                    id="passengers"
-                    className="w-full h-10 pl-10 pr-4 rounded-md border border-input bg-background"
-                    value={passengers}
-                    onChange={(e) => {
-                      setPassengers(Number(e.target.value));
-                      if (selectedDepartCity && selectedArriveeCity) {
-                        estimatePrix(selectedArriveeCity);
-                      }
-                    }}
-                  >
-                    {[1, 2, 3, 4].map((num) => (
-                      <option key={num} value={num}>
-                        {num} {num === 1 ? "passager" : "passagers"}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {currentStep === 'choixType' && (
-          <div className="space-y-4 animate-fade-in">
-            <h4 className="font-medium text-gray-600">Quand souhaitez-vous partir ?</h4>
-            <div className="grid grid-cols-2 gap-4">
-              <Button 
-                type="button"
-                variant="outline"
-                className="w-full"
-                onClick={() => {
-                  setDate(new Date().toISOString().split('T')[0]);
-                  setPassengers(1);
-                  setCurrentStep('estimation');
-                  if (selectedArriveeCity) {
-                    estimatePrix(selectedArriveeCity);
-                  }
-                }}
-              >
-                <Clock className="mr-2 h-4 w-4" />
-                Tout de suite
-              </Button>
-
-              <Button 
-                type="button"
-                variant="outline"
-                className="w-full"
-                onClick={() => {
-                  setCurrentStep('details');
-                }}
-              >
-                <Calendar className="mr-2 h-4 w-4" />
-                Réserver
-              </Button>
-            </div>
-          </div>
-        )}
-
-        {currentStep === 'details' && (
-          <div className="space-y-4 animate-fade-in">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="date">Date</Label>
-                <div className="relative">
-                  <Calendar className="absolute left-3 top-3 h-4 w-4 text-gray-400 z-10" />
-                  <DatePicker
-                    selected={selectedDate}
-                    onChange={(date: Date) => {
-                      setSelectedDate(date);
-                      setDate(date.toISOString().split('T')[0]);
-                      if (selectedDepartCity && selectedArriveeCity) {
-                        estimatePrix(selectedArriveeCity);
-                      }
-                    }}
-                    minDate={new Date()}
-                    dateFormat="dd/MM/yyyy"
-                    className="w-full pl-10 h-10 rounded-md border border-input bg-background"
-                    placeholderText="Sélectionnez une date"
-                    showPopperArrow={false}
-                    popperProps={{
-                      positionFixed: true,
-                      strategy: "fixed"
-                    }}
-                    popperModifiers={[
-                      {
-                        name: 'preventOverflow',
-                        options: {
-                          rootBoundary: 'viewport',
-                          tether: false,
-                          altAxis: true
-                        }
-                      }
-                    ]}
-                    popperPlacement="bottom-start"
-                    customInput={
-                      <input
-                        className="w-full pl-10 h-10 rounded-md border border-input bg-background"
-                      />
-                    }
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="passengers">Passagers</Label>
-                <div className="relative">
-                  <Users className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-                  <select 
-                    id="passengers"
-                    className="w-full h-10 pl-10 pr-4 rounded-md border border-input bg-background"
-                    value={passengers}
-                    onChange={(e) => {
-                      setPassengers(Number(e.target.value));
-                      if (selectedDepartCity && selectedArriveeCity) {
-                        estimatePrix(selectedArriveeCity);
-                      }
-                    }}
-                  >
-                {[1, 2, 3, 4].map((num) => (
-                  <option key={num} value={num}>
-                    {num} {num === 1 ? "passager" : "passagers"}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-            </div>
-            <Button 
-              type="button"
-              className="w-full"
-              onClick={() => {
-                setCurrentStep('estimation');
-                if (selectedArriveeCity) {
-                  estimatePrix(selectedArriveeCity);
-                }
-              }}
-            >
-              Voir l'estimation
-            </Button>
-          </div>
-        )}
-
-        {currentStep === 'estimation' && estimation && (
-          <div className="mt-4 p-4 bg-gray-50 rounded-lg animate-fade-in">
-            <h4 className="font-medium text-gray-900">Estimation</h4>
-            <div className="mt-2 space-y-1 text-sm text-gray-600">
-              <p>Prix par km : {Number(prixParKm).toFixed(2)} DT</p>
-              <p>Prix total : {Number(estimation.prixBase).toFixed(2)} DT</p>
-              <p>Frais de service : {Number(estimation.fraisService).toFixed(2)} DT</p>
-              
-              {Object.entries(estimation.detail.majorations || {}).map(([type, value]) => (
-                <p key={type}>
-                  Majoration {type} : +{value.replace('x', '').replace('+', '')} {type === 'passagers' ? 'passager(s)' : 'DT'}
-                </p>
-              ))}
-
-              <div className="border-t border-gray-200 my-2 pt-2">
-                <p>Distance : {Number(estimation.detail.distance).toFixed(1)} km</p>
-                <p>Durée estimée : {estimation.detail.duree}</p>
+        {/* Ville d'arrivée */}
+        <div className="space-y-2">
+          <Label>Ville d'arrivée</Label>
+          <CitySelect
+            id="arrivee"
+            value={arriveeQuery}
+            onChange={setArriveeQuery}
+            onSelect={(city) => handleCitySelect(city, 'arrivee')}
+            suggestions={arriveeSuggestions}
+            placeholder="Ville d'arrivée"
+            label="Destination"
+          />
         </div>
 
-              <p className="text-lg font-semibold text-primary mt-2">
-                Total : {Number(estimation.total).toFixed(2)} DT
+        {/* Résultat de l'estimation */}
+        {estimation && (
+          <div className="mt-4 p-4 bg-blue-50 border border-blue-100 rounded-lg">
+            <h4 className="font-medium mb-2 text-blue-900">Estimation</h4>
+            <div className="space-y-2 text-sm">
+              <p className="text-lg font-semibold text-blue-900">
+                Prix total: {estimation.montant}€
               </p>
-            </div>
-
-            <Button 
-              type="submit"
-              className={`w-full mt-4 ${
-                searchingDriver 
-                  ? 'bg-blue-900 hover:bg-blue-800' 
-                  : 'bg-primary hover:bg-primary/90'
-              }`}
-              disabled={searchingDriver}
-              onClick={() => {
-                setSearchingDriver(true);
-                let step = 0;
-                const interval = setInterval(() => {
-                  if (step < searchMessages.length - 1) {
-                    step++;
-                    setSearchStep(step);
-                  } else {
-                    clearInterval(interval);
-                    setTimeout(() => {
-                      setSearchingDriver(false);
-                      setShowDialog(true);
-                    }, 2000);
-                  }
-                }, 1500);
-              }}
-            >
-              {searchingDriver ? (
-                <div className="space-y-4 py-6 bg-gradient-to-b from-slate-800 to-slate-900 rounded-lg w-full">
-                  <div className="flex flex-col items-center justify-center space-y-4">
-                    <div className="animate-spin h-12 w-12 border-4 border-teal-400 border-t-transparent rounded-full shadow-lg shadow-teal-500/20" />
-                    <span className="text-xl font-semibold text-white text-center px-4">
-                      {searchMessages[searchStep]}
-                    </span>
+              <div className="grid grid-cols-2 gap-2 text-blue-800">
+                <div>
+                  <p className="font-medium">Distance</p>
+                  <p>{formatDistance(estimation.details.distance)}km</p>
+                </div>
+                <div>
+                  <p className="font-medium">Durée</p>
+                  <p>{formatDuree(estimation.details.duree)}</p>
+                </div>
+                <div>
+                  <p className="font-medium">Prix par km</p>
+                  <p>{estimation.details.prixBase}€</p>
+                </div>
+              </div>
+              <div className="mt-3 pt-3 border-t border-blue-200">
+                <p className="font-medium text-blue-900 mb-1">Suppléments</p>
+                <div className="grid grid-cols-2 gap-2 text-blue-800">
+                  <div>
+                    <p className="font-medium">Passagers</p>
+                    <p>{estimation.details.supplements.passagers}</p>
                   </div>
-                  <div className="text-base font-medium text-teal-200 mt-4 text-center">
-                    <span className="text-white">{selectedDepartCity?.nom}</span>
-                    <span className="mx-2 text-teal-400">→</span>
-                    <span className="text-white">{selectedArriveeCity?.nom}</span>
-                  </div>
-                  <div className="flex justify-center items-center px-4 mt-2">
-                    <div className="text-sm text-teal-100 font-medium text-center w-full max-w-[250px] leading-relaxed space-y-1">
-                      <p>Veuillez patienter</p>
-                      <p>pendant que nous recherchons</p>
-                      <p className="text-teal-300">le meilleur chauffeur disponible</p>
-                    </div>
+                  <div>
+                    <p className="font-medium">Climatisation</p>
+                    <p>{estimation.details.supplements.climatisation}</p>
                   </div>
                 </div>
-              ) : (
-                'Confirmer la réservation'
-              )}
-            </Button>
+              </div>
+              
+              {/* Bouton de réservation */}
+              <div className="mt-4 pt-4 border-t border-blue-200">
+                <Button 
+                  type="button"
+                  className="w-full bg-green-600 hover:bg-green-700 text-white"
+                  onClick={() => {
+                    setIsReservationStarted(true);
+                    console.log('🎯 Réservation initiée:', {
+                      depart: estimation.details.villeDepart,
+                      arrivee: estimation.details.villeArrivee,
+                      montant: estimation.montant
+                    });
+                  }}
+                >
+                  Je réserve
+                </Button>
+              </div>
+            </div>
           </div>
         )}
 
-        {currentStep !== 'estimation' && (
+        {/* Bouton de recherche - affiché uniquement si pas d'estimation */}
+        {!estimation && (
           <Button 
-            type="button"
-            className="w-full bg-primary hover:bg-primary/90 text-white"
-            onClick={goToNextStep}
+            type="submit"
+            className="w-full"
+            disabled={loading || !selectedDepartCity || !selectedArriveCity}
           >
-            Continuer
+            {loading ? 'Calcul en cours...' : 'Calculer l\'estimation'}
           </Button>
         )}
-      </form>
-      {isLoading && (
-        <div className="absolute inset-0 bg-white/80 flex items-center justify-center">
-          <div className="animate-spin h-8 w-8 border-4 border-primary border-t-transparent rounded-full" />
-        </div>
-      )}
 
-      {error && (
-        <div className="p-4 mb-4 bg-red-50 text-red-600 rounded-md">
-          {error}
-        </div>
-      )}
+        {/* Message d'erreur */}
+        {error && (
+          <div className="p-3 text-sm text-red-600 bg-red-50 rounded-md">
+            {error}
+          </div>
+        )}
+
+        {/* Date et heure du trajet - affiché uniquement après clic sur "Je réserve" */}
+        {isReservationStarted && (
+          <div className="mt-4 pt-4 border-t border-blue-200">
+            <DateTimePicker
+              date={selectedDate}
+              time={selectedTime}
+              onDateChange={setSelectedDate}
+              onTimeChange={setSelectedTime}
+              label="Date et heure du trajet"
+            />
+
+            {/* Choix du mode de paiement */}
+            <div className="mt-4">
+              <Label>Mode de paiement</Label>
+              <div className="grid grid-cols-2 gap-2 mt-2">
+                <Button 
+                  type="button"
+                  variant={paymentMethod === 'card' ? 'default' : 'outline'}
+                  className={`flex items-center justify-center space-x-2 p-4 ${
+                    paymentMethod === 'card' ? 'bg-green-600 text-white' : ''
+                  }`}
+                  onClick={() => setPaymentMethod('card')}
+                >
+                  <span>💳</span>
+                  <span>Carte bancaire</span>
+                </Button>
+                <Button 
+                  type="button"
+                  variant={paymentMethod === 'cash' ? 'default' : 'outline'}
+                  className={`flex items-center justify-center space-x-2 p-4 ${
+                    paymentMethod === 'cash' ? 'bg-green-600 text-white' : ''
+                  }`}
+                  onClick={() => setPaymentMethod('cash')}
+                >
+                  <span>💵</span>
+                  <span>Espèces</span>
+                </Button>
+              </div>
+            </div>
+
+            <Button 
+              type="button"
+              className="w-full mt-4 bg-green-600 hover:bg-green-700 text-white"
+              disabled={!paymentMethod}
+              onClick={handlePaymentContinue}
+            >
+              Continuer
+            </Button>
+          </div>
+        )}
+      </form>
     </div>
   );
 };
