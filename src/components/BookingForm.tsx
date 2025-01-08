@@ -223,16 +223,36 @@ export const BookingForm = ({ onSearchComplete }: BookingFormProps) => {
       const data = response.data.data;
       console.log('📊 Données reçues:', data);
 
-      setPrixParKm(Number(data.details.prixBase || 0));
+      // Vérification des données requises
+      if (!data.details?.prixBase || !data.details?.distance) {
+        console.error('❌ Données manquantes:', data);
+        throw new Error('Données de prix manquantes');
+      }
 
-      // Formatage avec la structure correcte
+      const prixParKm = Number(data.details.prixBase);
+      const distance = Number(data.details.distance);
+
+      // Vérification des valeurs numériques
+      if (isNaN(prixParKm) || isNaN(distance)) {
+        console.error('❌ Valeurs invalides:', { prixParKm, distance });
+        throw new Error('Valeurs de prix invalides');
+      }
+
+      setPrixParKm(prixParKm);
+
+      // Calcul avec vérification
+      const prixBase = prixParKm * distance;
+      if (isNaN(prixBase)) {
+        throw new Error('Erreur dans le calcul du prix');
+      }
+
       const formattedEstimation = {
-        prixParKm: Number(data.details.prixBase || 0),
-        prixBase: Number(data.details.prixBase || 0) * data.details.distance,
+        prixParKm,
+        prixBase,
         fraisService: Number(data.details.fraisService || 0),
-        total: Number(data.montant || 0),
+        total: Number(data.montant || prixBase), // Fallback sur prixBase si montant non disponible
         detail: {
-          distance: Number(data.details.distance || 0),
+          distance,
           duree: formatDuration(Number(data.details.duree || 0)),
           majorations: {
             passagers: data.details.supplements?.passagers || '1',
@@ -241,26 +261,13 @@ export const BookingForm = ({ onSearchComplete }: BookingFormProps) => {
         }
       };
 
-      // Ajout de logs pour vérifier les calculs
-      console.log('💰 Détails du calcul:', {
-        distanceKm: formattedEstimation.detail.distance,
-        duree: formattedEstimation.detail.duree,
-        prixParKm: data.details.prixBase,
-        prixBaseTotal: formattedEstimation.prixBase,
+      // Log détaillé des calculs
+      console.log('💰 Calculs détaillés:', {
+        prixParKm,
+        distance,
+        prixBase,
         total: formattedEstimation.total,
-        supplements: data.details.supplements
-      });
-
-      // Vérification du prix minimum (changeons le seuil à 1 DT)
-      if (formattedEstimation.total < 1) {
-        console.error('❌ Prix invalide:', formattedEstimation);
-        throw new Error('Prix invalide');
-      }
-
-      console.log('💰 Prix calculé:', {
-        base: formattedEstimation.prixBase,
-        frais: formattedEstimation.fraisService,
-        total: formattedEstimation.total
+        calcul: `${prixParKm} DT/km × ${distance} km = ${prixBase} DT`
       });
 
       setEstimation(formattedEstimation);
