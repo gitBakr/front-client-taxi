@@ -2,6 +2,20 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import path from "path";
 
+interface ProxyResponse {
+  status: string;
+  data: unknown;
+}
+
+// Fonction de vérification du type
+function isProxyResponse(obj: unknown): obj is ProxyResponse {
+  return obj !== null && 
+         typeof obj === 'object' && 
+         'status' in obj && 
+         typeof (obj as any).status === 'string' && 
+         'data' in obj;
+}
+
 // https://vitejs.dev/config/
 export default defineConfig({
   plugins: [react()],
@@ -18,7 +32,6 @@ export default defineConfig({
         changeOrigin: true,
         secure: false,
         rewrite: (path) => {
-          // Ne pas modifier le chemin, garder /api
           const newPath = path;
           console.log('🔄 Proxy URL:', {
             original: path,
@@ -45,13 +58,15 @@ export default defineConfig({
             });
             proxyRes.on('end', () => {
               try {
-                const data = JSON.parse(body);
-                console.log('📥 Réponse reçue:', {
-                  status: proxyRes.statusCode,
-                  url: req.url,
-                  data,
-                  headers: proxyRes.headers
-                });
+                const parsedData: unknown = JSON.parse(body);
+                if (isProxyResponse(parsedData)) {
+                  console.log('📥 Réponse reçue:', {
+                    status: proxyRes.statusCode,
+                    url: req.url,
+                    data: parsedData,
+                    headers: proxyRes.headers
+                  });
+                }
               } catch (e) {
                 console.error('❌ Erreur parsing réponse:', {
                   body,
@@ -69,4 +84,9 @@ export default defineConfig({
       "@": path.resolve(__dirname, "./src"),
     },
   },
+  preview: {
+    port: Number(process.env.PORT) || 4173,
+    host: '0.0.0.0',
+    strictPort: true
+  }
 });
