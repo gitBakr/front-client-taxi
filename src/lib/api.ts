@@ -2,20 +2,22 @@ import axios from 'axios';
 
 const API_URL = import.meta.env.VITE_API_URL;
 
-if (!API_URL) {
-  console.error('❌ VITE_API_URL non définie');
-}
-
-console.log('🌍 Environnement:', {
-  mode: import.meta.env.MODE,
+console.log('🌍 Configuration API:', {
+  environment: import.meta.env.MODE,
   apiUrl: API_URL,
-  fullUrl: `${API_URL}/api`
+  fullUrl: `${API_URL}/api`,
+  isDevelopment: import.meta.env.DEV,
+  isProduction: import.meta.env.PROD
 });
 
 const api = axios.create({
     baseURL: `${API_URL}/api`,
     headers: {
         'Content-Type': 'application/json'
+    },
+    validateStatus: (status) => {
+        console.log('📡 Status API:', status);
+        return status >= 200 && status < 300;
     }
 });
 
@@ -91,6 +93,12 @@ export const prixAPI = {
             passagers: Number(params.passagers),
             options: params.options?.join(',') || 'climatisation'
         };
+
+        console.log('🚀 Requête API:', {
+            url: `${API_URL}/api/prix/estimation`,
+            params: queryParams,
+            environment: import.meta.env.MODE
+        });
 
         return api.get<{status: string; data: EstimationResponse}>('/prix/estimation', { 
             params: queryParams

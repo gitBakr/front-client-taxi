@@ -223,10 +223,16 @@ export const BookingForm = ({ onSearchComplete }: BookingFormProps) => {
       const data = response.data.data;
       console.log('📊 Données reçues:', data);
 
-      // Vérification des données requises
-      if (!data.details?.prixBase || !data.details?.distance) {
-        console.error('❌ Données manquantes:', data);
-        throw new Error('Données de prix manquantes');
+      // Vérification de la structure complète
+      if (!data?.details?.prixBase || !data?.details?.distance) {
+        console.error('❌ Structure de la réponse:', {
+          data,
+          details: data?.details,
+          hasPrice: !!data?.details?.prixBase,
+          hasDistance: !!data?.details?.distance,
+          raw: response.data
+        });
+        throw new Error('Structure de réponse invalide');
       }
 
       const prixParKm = Number(data.details.prixBase);
