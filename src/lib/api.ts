@@ -25,16 +25,18 @@ interface Majorations {
 
 // Interface pour la réponse de l'estimation
 interface EstimationResponse {
-    prixBase: number;
-    fraisService: number;
-    total: number;
-    detail?: {
-        distance?: number;
-        duree?: number;
-        majorations?: {
-            climatisation?: number;
-            nuit?: number;
-            weekend?: number;
+    status: string;
+    data: {
+        details: {
+            prixBase: number;
+            fraisService: number;
+            total: number;
+            distance: number;
+            duree: number;
+            supplements?: {
+                passagers?: string;
+                climatisation?: string;
+            };
         };
     };
 }

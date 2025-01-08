@@ -150,7 +150,7 @@ export const BookingForm = ({ onSearchComplete }: BookingFormProps) => {
   // Estimation instantanée quand une ville est sélectionnée
   const estimatePrix = async (selectedCity: City) => {
     setIsLoading(true);
-    setError(null); // Réinitialiser l'erreur
+    setError(null);
 
     try {
       if (!selectedDepartCity || !selectedCity) {
@@ -198,32 +198,19 @@ export const BookingForm = ({ onSearchComplete }: BookingFormProps) => {
 
       const response = await prixAPI.calculerPrix(params);
       
-      // Log détaillé de la réponse
-      console.log('📦 Réponse API brute:', {
-        status: response?.status,
-        data: response?.data,
-        details: response?.data?.data
-      });
+      console.log('📦 Réponse API complète:', response.data);
 
-      // Vérification plus précise de la structure
-      if (response?.data?.status !== "success") {
-        throw new Error('Réponse API non valide');
-      }
-
-      const estimationData = response.data.data;
-      console.log('🔍 Données estimation:', estimationData);
-
-      // Vérification de la structure des données
+      const estimationData = response.data.data?.details;
+      
       if (!estimationData) {
-        console.error('❌ Données manquantes:', response.data);
-        throw new Error('Données de prix manquantes');
+        throw new Error('Données de prix manquantes dans la réponse');
       }
 
-      // Formatage avec vérification des valeurs
+      // Formatage avec la bonne structure
       const formattedEstimation = {
         prixBase: Number(estimationData.prixBase) || 0,
         fraisService: Number(estimationData.fraisService) || 0,
-        total: Number(estimationData.montant) || 0,
+        total: Number(estimationData.total) || 0,
         detail: {
           distance: Number(estimationData.distance) || 0,
           duree: Number(estimationData.duree) || 0,
@@ -234,24 +221,22 @@ export const BookingForm = ({ onSearchComplete }: BookingFormProps) => {
         }
       };
 
-      // Vérification des valeurs formatées
-      console.log('✅ Estimation formatée:', {
-        original: estimationData,
-        formatted: formattedEstimation
-      });
-
+      // Vérification plus stricte des valeurs
       if (formattedEstimation.total === 0) {
-        console.warn('⚠️ Prix total à 0, données originales:', estimationData);
+        console.error('❌ Données de prix invalides:', {
+          original: response.data,
+          formatted: formattedEstimation
+        });
+        throw new Error('Le calcul du prix a échoué');
       }
 
       setEstimation(formattedEstimation);
 
     } catch (error: any) {
       const errorMessage = error.response?.data?.message || error.message || 'Erreur lors du calcul du prix';
-      console.error('❌ Erreur détaillée:', {
+      console.error('❌ Erreur estimation:', {
         message: errorMessage,
-        response: error.response?.data,
-        originalError: error
+        response: error.response?.data
       });
       setError(errorMessage);
     } finally {
