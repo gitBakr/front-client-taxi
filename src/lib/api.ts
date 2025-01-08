@@ -1,8 +1,16 @@
 import axios from 'axios';
 
-const API_URL = import.meta.env.VITE_API_URL || 'https://backend-taxi-e2lz.onrender.com';
+const API_URL = import.meta.env.VITE_API_URL;
 
-console.log('🔗 API URL utilisée:', API_URL); // Pour déboguer
+if (!API_URL) {
+  console.error('❌ VITE_API_URL non définie');
+}
+
+console.log('🌍 Environnement:', {
+  mode: import.meta.env.MODE,
+  apiUrl: API_URL,
+  fullUrl: `${API_URL}/api`
+});
 
 const api = axios.create({
     baseURL: `${API_URL}/api`,
