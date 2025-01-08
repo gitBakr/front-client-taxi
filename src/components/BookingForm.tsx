@@ -62,6 +62,32 @@ interface VilleSearchResponse {
   data: City[];
 }
 
+// Ajoutons une fonction utilitaire pour formater la durée
+const formatDuration = (minutes: number): string => {
+  const hours = Math.floor(minutes / 60);
+  const remainingMinutes = minutes % 60;
+  
+  if (hours > 0) {
+    return `${hours}h${remainingMinutes > 0 ? ` ${remainingMinutes}min` : ''}`;
+  }
+  return `${remainingMinutes}min`;
+};
+
+interface EstimationState {
+  prixParKm: number;
+  prixBase: number;
+  fraisService: number;
+  total: number;
+  detail: {
+    distance: number;
+    duree: string;
+    majorations: {
+      climatisation?: number;
+      nuit?: number;
+    };
+  };
+}
+
 export const BookingForm = ({ onSearchComplete }: BookingFormProps) => {
   const [departQuery, setDepartQuery] = useState('');
   const [arriveeQuery, setArriveeQuery] = useState('');
@@ -73,19 +99,7 @@ export const BookingForm = ({ onSearchComplete }: BookingFormProps) => {
     const today = new Date();
     return today.toISOString().split('T')[0];
   });
-  const [estimation, setEstimation] = useState<{
-    prixBase: number;
-    fraisService: number;
-    total: number;
-    detail: {
-      distance: number;
-      duree: number;
-      majorations: {
-        climatisation?: number;
-        nuit?: number;
-      };
-    };
-  } | null>(null);
+  const [estimation, setEstimation] = useState<EstimationState | null>(null);
   const [showDialog, setShowDialog] = useState(false);
   const [selectedDepartCity, setSelectedDepartCity] = useState<City | null>(null);
   const [selectedArriveeCity, setSelectedArriveeCity] = useState<City | null>(null);
@@ -97,6 +111,7 @@ export const BookingForm = ({ onSearchComplete }: BookingFormProps) => {
   const [searchStep, setSearchStep] = useState<number>(0);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [prixParKm, setPrixParKm] = useState<number>(0);
 
   const debouncedDepartQuery = useDebounce(departQuery, 300);
   const debouncedArriveeQuery = useDebounce(arriveeQuery, 300);
@@ -208,14 +223,17 @@ export const BookingForm = ({ onSearchComplete }: BookingFormProps) => {
       const data = response.data.data;
       console.log('📊 Données reçues:', data);
 
+      setPrixParKm(Number(data.details.prixBase || 0));
+
       // Formatage avec la structure correcte
       const formattedEstimation = {
-        prixBase: Number(data.details.prixBase || 0) * data.details.distance, // Prix de base total
+        prixParKm: Number(data.details.prixBase || 0),
+        prixBase: Number(data.details.prixBase || 0) * data.details.distance,
         fraisService: Number(data.details.fraisService || 0),
-        total: Number(data.montant || 0), // Déjà le montant total
+        total: Number(data.montant || 0),
         detail: {
           distance: Number(data.details.distance || 0),
-          duree: Number(data.details.duree || 0),
+          duree: formatDuration(Number(data.details.duree || 0)),
           majorations: {
             passagers: data.details.supplements?.passagers || '1',
             climatisation: data.details.supplements?.climatisation || '1'
@@ -226,7 +244,7 @@ export const BookingForm = ({ onSearchComplete }: BookingFormProps) => {
       // Ajout de logs pour vérifier les calculs
       console.log('💰 Détails du calcul:', {
         distanceKm: formattedEstimation.detail.distance,
-        dureeMin: formattedEstimation.detail.duree,
+        duree: formattedEstimation.detail.duree,
         prixParKm: data.details.prixBase,
         prixBaseTotal: formattedEstimation.prixBase,
         total: formattedEstimation.total,
@@ -542,18 +560,19 @@ export const BookingForm = ({ onSearchComplete }: BookingFormProps) => {
           <div className="mt-4 p-4 bg-gray-50 rounded-lg animate-fade-in">
             <h4 className="font-medium text-gray-900">Estimation</h4>
             <div className="mt-2 space-y-1 text-sm text-gray-600">
-              <p>Prix de base : {Number(estimation.prixBase).toFixed(2)} DT</p>
+              <p>Prix par km : {Number(prixParKm).toFixed(2)} DT</p>
+              <p>Prix total : {Number(estimation.prixBase).toFixed(2)} DT</p>
               <p>Frais de service : {Number(estimation.fraisService).toFixed(2)} DT</p>
               
               {Object.entries(estimation.detail.majorations || {}).map(([type, value]) => (
                 <p key={type}>
-                  Majoration {type} : +{((Number(value) - 1) * 100).toFixed(0)}%
+                  Majoration {type} : +{value.replace('x', '').replace('+', '')} {type === 'passagers' ? 'passager(s)' : 'DT'}
                 </p>
               ))}
 
               <div className="border-t border-gray-200 my-2 pt-2">
                 <p>Distance : {Number(estimation.detail.distance).toFixed(1)} km</p>
-                <p>Durée estimée : {Math.round(estimation.detail.duree)} min</p>
+                <p>Durée estimée : {estimation.detail.duree}</p>
         </div>
 
               <p className="text-lg font-semibold text-primary mt-2">
