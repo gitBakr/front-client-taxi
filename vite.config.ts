@@ -17,7 +17,7 @@ function isProxyResponse(obj: unknown): obj is ProxyResponse {
 }
 
 // https://vitejs.dev/config/
-export default defineConfig({
+export default defineConfig(({ mode }) => ({
   plugins: [react()],
   server: {
     host: '0.0.0.0',
@@ -26,7 +26,7 @@ export default defineConfig({
     cors: {
       origin: "*",
     },
-    proxy: {
+    proxy: mode === 'development' ? {
       '/api': {
         target: 'http://localhost:3002',
         changeOrigin: true,
@@ -77,7 +77,7 @@ export default defineConfig({
           });
         }
       }
-    }
+    } : undefined
   },
   resolve: {
     alias: {
@@ -89,4 +89,4 @@ export default defineConfig({
     host: '0.0.0.0',
     strictPort: true
   }
-});
+}));

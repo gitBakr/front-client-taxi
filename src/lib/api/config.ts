@@ -1,7 +1,14 @@
 import axios from 'axios';
 
-// Configuration de l'URL de l'API
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3002';
+const apiUrl = import.meta.env.VITE_API_URL;
+
+export const config = {
+  apiUrl,
+  fullUrl: apiUrl,
+  environment: import.meta.env.MODE,
+  isDevelopment: import.meta.env.MODE === 'development',
+  isProduction: import.meta.env.MODE === 'production'
+};
 
 // Logs de configuration
 console.log('🌍 Configuration API:', {
